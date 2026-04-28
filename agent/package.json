@@ -1,0 +1,32 @@
+{
+  "name": "yield-fortress-agent",
+  "version": "0.1.0",
+  "description": "ElizaOS AI agent — runs the Yield Fortress Optimizer character inside an iExec Nox TDX TEE worker.",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "engines": { "node": ">=20.0.0" },
+  "scripts": {
+    "dev":   "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "build": "tsc -p tsconfig.json",
+    "iexec:init":  "iexec init --skip-wallet",
+    "iexec:app:deploy":  "iexec app deploy --chain bellecour",
+    "iexec:run":         "iexec app run --tag tee,scone --chain bellecour --watch"
+  },
+  "dependencies": {
+    "@elizaos/core":              "^0.1.9",
+    "@elizaos/plugin-bootstrap":  "^0.1.9",
+    "@iexec/dataprotector":       "^2.0.0",
+    "iexec":                      "^8.13.0",
+    "ethers":                     "^6.13.4",
+    "zod":                        "^3.23.8",
+    "dotenv":                     "^16.4.5",
+    "node-fetch":                 "^3.3.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.30",
+    "tsx":         "^4.19.2",
+    "typescript":  "^5.4.5"
+  }
+}
