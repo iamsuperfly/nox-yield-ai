@@ -32,6 +32,15 @@ nox-yield-ai/
 │   ├── .env.template
 │   ├── tsconfig.json
 │   └── package.json
+├── frontend/                            # Next.js 15 dashboard (App Router)
+│   ├── src/
+│   │   ├── app/                         # layout, providers, page
+│   │   ├── components/                  # balance, deposit/withdraw, rebalance, yields…
+│   │   └── lib/                         # wagmi, contracts, abis, ciphertext helpers
+│   ├── tailwind.config.ts
+│   ├── next.config.mjs
+│   ├── .env.example
+│   └── package.json
 ├── scripts/
 │   ├── deploy.js                        # compiles + deploys vault + tokens
 │   └── interact.js                      # smoke-test against a deployed vault
@@ -39,6 +48,7 @@ nox-yield-ai/
 │   └── ConfidentialVault.test.js        # confidentiality + rebalance assertions
 ├── hardhat.config.ts
 ├── package.json
+├── pnpm-workspace.yaml                  # frontend + agent are pnpm workspaces
 ├── .env.example
 ├── .gitignore
 ├── feedback.md
@@ -88,6 +98,50 @@ CONFIDENTIAL_VAULT_ADDRESS=0x…
 | Arbitrum Sepolia ETH | <https://faucet.quicknode.com/arbitrum/sepolia> · <https://www.alchemy.com/faucets/arbitrum-sepolia> |
 | iExec test RLC | <https://faucet.iex.ec> |
 | Arbiscan API key | <https://arbiscan.io/myapikey> |
+
+---
+
+## 🖥 How to run the frontend locally
+
+The dashboard lives in [`./frontend`](./frontend) — Next.js 15 (App Router) +
+RainbowKit + wagmi + Tailwind/shadcn.
+
+```bash
+cd frontend
+cp .env.example .env.local     # paste vault + token addresses + WalletConnect Project ID
+pnpm install
+pnpm run dev                   # → http://localhost:3000
+```
+
+You'll need to populate `.env.local` with:
+
+- `NEXT_PUBLIC_VAULT_ADDRESS`, `NEXT_PUBLIC_ASSET_TOKEN_ADDRESS`,
+  `NEXT_PUBLIC_SHARE_TOKEN_ADDRESS` — taken from the JSON written by
+  `pnpm run deploy:arbsepolia` (printed at the end of the deploy run).
+- `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` — free, 30 seconds at
+  <https://cloud.walletconnect.com>.
+- `NEXT_PUBLIC_RPC_URL` — defaults to the public Arbitrum Sepolia RPC; an
+  Alchemy/Infura URL gives much better latency.
+
+What you get:
+
+- **Confidential Balance** card with a 🔒 (Lock) badge — reads your
+  encrypted ERC-7984 share handle from the cFORT token.
+- **Deposit / Withdraw** that builds the ciphertext + caller-bound input
+  proof client-side and calls the vault.
+- **Strategy universe** table with mock yields (T-Bills 4.80 %, IG Bonds
+  5.90 %, Private Credit 7.20 %, Tokenised MMF 5.00 %) — replaced by
+  Chainlink Functions in BUILD 2.
+- **Request AI Rebalance** button — broadcasts `requestRebalance()` and
+  shows *"AI Agent is optimizing in TEE…"* until the `RebalanceFulfilled`
+  event arrives with the new portfolio commitment root.
+
+You can also run it from the project root:
+
+```bash
+pnpm run frontend:install
+pnpm run frontend:dev
+```
 
 ---
 

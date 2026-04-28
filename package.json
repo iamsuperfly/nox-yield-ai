@@ -19,6 +19,10 @@
     "agent:install": "cd agent && pnpm install",
     "agent:dev": "cd agent && pnpm run dev",
     "agent:build": "cd agent && pnpm run build",
+    "frontend:install": "cd frontend && pnpm install",
+    "frontend:dev": "cd frontend && pnpm run dev",
+    "frontend:build": "cd frontend && pnpm run build",
+    "frontend:start": "cd frontend && pnpm run start",
     "lint": "eslint . --ext .ts,.js"
   },
   "devDependencies": {
