@@ -4,9 +4,9 @@
   "private": true,
   "description": "Confidential AI Yield Fortress — Next.js 15 dashboard.",
   "scripts": {
-    "dev": "next dev -p 3000",
+    "dev": "next dev -H 0.0.0.0 -p 3000",
     "build": "next build",
-    "start": "next start -p 3000",
+    "start": "next start -H 0.0.0.0 -p 3000",
     "lint": "next lint",
     "typecheck": "tsc --noEmit"
   },

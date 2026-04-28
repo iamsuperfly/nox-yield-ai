@@ -1,0 +1,12 @@
+{
+  "network": "arbitrumSepolia",
+  "chainId": 421614,
+  "deployer": "0x0F91dAFF838FFB3Befd6caFA14F13eeb8D4F5561",
+  "contracts": {
+    "ConfidentialAsset": "0x85EF3afECFB7e7c021cE974748e2c4f4D99A4c9e",
+    "ConfidentialShare": "0xebB7a8967C5E18eA37C445Eaa6c5B3Ef6b3119D2",
+    "ConfidentialYieldVault": "0x2ef85dE8242D490e850855Dc28FbD95bD4F5CEb1"
+  },
+  "rebalanceCooldownSeconds": 3600,
+  "deployedAt": "2026-04-28T17:05:12.760Z"
+}

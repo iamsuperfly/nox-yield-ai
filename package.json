@@ -50,5 +50,5 @@
     "@openzeppelin/contracts": "^5.1.0",
     "@openzeppelin/confidential-contracts": "^0.2.0"
   },
-  "packageManager": "pnpm@9.12.0"
+  "packageManager": "pnpm@10.26.1"
 }
