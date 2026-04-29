@@ -5,6 +5,7 @@ import { RebalanceCard }    from "@/components/rebalance-card";
 import { YieldTable }       from "@/components/yield-table";
 import { PortfolioCard }    from "@/components/portfolio-card";
 import { NetworkBanner }    from "@/components/network-banner";
+import { FaucetCard }       from "@/components/faucet-card";
 import { Footer }           from "@/components/footer";
 
 export default function HomePage() {
@@ -36,6 +37,7 @@ export default function HomePage() {
         <section className="grid grid-cols-1 gap-5 lg:grid-cols-3">
           <div className="lg:col-span-2 space-y-5">
             <BalanceCard />
+            <FaucetCard />
             <DepositWithdraw />
             <YieldTable />
           </div>
