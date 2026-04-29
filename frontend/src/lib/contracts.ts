@@ -2,14 +2,29 @@ import { type Address, keccak256, encodePacked, toHex } from "viem";
 
 const env = (k: string) => process.env[k] ?? "";
 
-export const CHAIN_ID = Number(env("NEXT_PUBLIC_CHAIN_ID") || "421614");
-export const RPC_URL  = env("NEXT_PUBLIC_RPC_URL") || "https://sepolia-rollup.arbitrum.io/rpc";
+/**
+ * Live deployment on Arbitrum Sepolia (chainId 421614).
+ * These are the source-of-truth defaults — any NEXT_PUBLIC_* override is
+ * applied on top, but the app works out of the box without env vars.
+ * See `deployments/arbitrumSepolia-421614.json`.
+ */
+const DEFAULTS = {
+  CHAIN_ID: 421614,
+  RPC_URL:  "https://sepolia-rollup.arbitrum.io/rpc",
+  VAULT:    "0x2ef85dE8242D490e850855Dc28FbD95bD4F5CEb1",
+  ASSET:    "0x85EF3afECFB7e7c021cE974748e2c4f4D99A4c9e",
+  SHARE:    "0xebB7a8967C5E18eA37C445Eaa6c5B3Ef6b3119D2",
+  APP_NAME: "Nox Yield AI",
+} as const;
 
-export const VAULT_ADDRESS:       Address = (env("NEXT_PUBLIC_VAULT_ADDRESS")        || "0x0000000000000000000000000000000000000000") as Address;
-export const ASSET_TOKEN_ADDRESS: Address = (env("NEXT_PUBLIC_ASSET_TOKEN_ADDRESS")  || "0x0000000000000000000000000000000000000000") as Address;
-export const SHARE_TOKEN_ADDRESS: Address = (env("NEXT_PUBLIC_SHARE_TOKEN_ADDRESS")  || "0x0000000000000000000000000000000000000000") as Address;
+export const CHAIN_ID = Number(env("NEXT_PUBLIC_CHAIN_ID") || DEFAULTS.CHAIN_ID);
+export const RPC_URL  = env("NEXT_PUBLIC_RPC_URL") || DEFAULTS.RPC_URL;
 
-export const APP_NAME = env("NEXT_PUBLIC_APP_NAME") || "Confidential AI Yield Fortress";
+export const VAULT_ADDRESS:       Address = (env("NEXT_PUBLIC_VAULT_ADDRESS")        || DEFAULTS.VAULT) as Address;
+export const ASSET_TOKEN_ADDRESS: Address = (env("NEXT_PUBLIC_ASSET_TOKEN_ADDRESS")  || DEFAULTS.ASSET) as Address;
+export const SHARE_TOKEN_ADDRESS: Address = (env("NEXT_PUBLIC_SHARE_TOKEN_ADDRESS")  || DEFAULTS.SHARE) as Address;
+
+export const APP_NAME = env("NEXT_PUBLIC_APP_NAME") || DEFAULTS.APP_NAME;
 
 export const isVaultConfigured = (): boolean =>
   VAULT_ADDRESS !== "0x0000000000000000000000000000000000000000";
