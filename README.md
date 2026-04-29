@@ -3,6 +3,15 @@
 > **Private institutional yield vault on Arbitrum Sepolia.**
 > Users deposit confidential ERC-7984 tokens. An autonomous AI agent runs entirely inside an iExec **Nox TDX TEE**, reads the encrypted portfolio + live yield data, and rebalances into the best tokenised real-world-asset strategies (T-Bills, IG bonds, private credit, MMFs) — **without ever exposing balances, positions or strategy weights on-chain.**
 
+**Live demo:** <https://nox-yield-ai.vercel.app>
+**Deployed on Arbitrum Sepolia** (addresses in [`deployments/arbitrumSepolia-421614.json`](./deployments/arbitrumSepolia-421614.json))
+
+| Contract | Address |
+| --- | --- |
+| ConfidentialYieldVault | [`0x2ef85dE8242D490e850855Dc28FbD95bD4F5CEb1`](https://sepolia.arbiscan.io/address/0x2ef85dE8242D490e850855Dc28FbD95bD4F5CEb1) |
+| ConfidentialAsset (cUSD) | [`0x85EF3afECFB7e7c021cE974748e2c4f4D99A4c9e`](https://sepolia.arbiscan.io/address/0x85EF3afECFB7e7c021cE974748e2c4f4D99A4c9e) |
+| ConfidentialShare (cFORT) | [`0xebB7a8967C5E18eA37C445Eaa6c5B3Ef6b3119D2`](https://sepolia.arbiscan.io/address/0xebB7a8967C5E18eA37C445Eaa6c5B3Ef6b3119D2) |
+
 ---
 
 ## ✨ Why this is interesting
