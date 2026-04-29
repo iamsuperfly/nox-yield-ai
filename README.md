@@ -5,6 +5,7 @@
 
 **Live demo:** <https://nox-yield-ai.vercel.app>
 **Deployed on Arbitrum Sepolia** (addresses in [`deployments/arbitrumSepolia-421614.json`](./deployments/arbitrumSepolia-421614.json))
+**Live Chainlink oracles + real TEE AI rebalancing** — clicking *Trigger AI Rebalance* in the demo reads ETH/USD, BTC/USD and USDC/USD from the official Chainlink AggregatorV3 feeds on Arb Sepolia, asks Groq's `llama-3.3-70b-versatile` for an institutional allocation given that live market state, then writes the resulting **encrypted** weights to the vault via `fulfilRebalance()`. Plaintext weights never touch the chain.
 
 | Contract | Address |
 | --- | --- |

@@ -8,25 +8,78 @@ import {
   useWriteContract,
   useWatchContractEvent,
 } from "wagmi";
-import { CircuitBoard, ExternalLink, Loader2, Sparkles } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  CircuitBoard,
+  ExternalLink,
+  Loader2,
+  Sparkles,
+  Activity,
+} from "lucide-react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { vaultAbi } from "@/lib/abis";
 import { VAULT_ADDRESS, isVaultConfigured, txUrl } from "@/lib/contracts";
 import { shortHash } from "@/lib/utils";
 
-type Phase = "idle" | "broadcasting" | "thinking" | "fulfilled";
+type Phase =
+  | "idle"
+  | "broadcasting"
+  | "thinking"
+  | "fulfilling"
+  | "fulfilled"
+  | "error";
+
+interface PriceQuote {
+  pair: string;
+  feed: `0x${string}`;
+  price: number;
+  ageSeconds: number;
+}
+interface Allocation {
+  strategy: string;
+  weightBps: number;
+}
+interface RebalanceResult {
+  ok: true;
+  txHash: `0x${string}`;
+  rebalanceId: string;
+  portfolioRoot: `0x${string}`;
+  prices: PriceQuote[];
+  plan: {
+    expectedApyBps: number;
+    reason: string;
+    marketCommentary: string;
+    allocations: Allocation[];
+  };
+}
+
+const STRATEGY_LABELS: Record<string, string> = {
+  US_TBILL_3M: "T-Bills 3M",
+  INVESTMENT_GRADE_CORP_BOND: "IG Bonds",
+  PRIVATE_CREDIT_DIRECT: "Private Credit",
+  TOKENISED_MMF: "Tokenised MMF",
+};
 
 export function RebalanceCard() {
   const { address } = useAccount();
-  const [tx, setTx] = React.useState<`0x${string}` | undefined>();
+  const [requestTx, setRequestTx] = React.useState<`0x${string}` | undefined>();
+  const [fulfilTx,  setFulfilTx]  = React.useState<`0x${string}` | undefined>();
   const [phase, setPhase] = React.useState<Phase>("idle");
-  const [lastFulfilledRoot, setLastFulfilledRoot] = React.useState<string | undefined>();
+  const [errorMsg, setErrorMsg] = React.useState<string | undefined>();
+  const [result, setResult] = React.useState<RebalanceResult | undefined>();
+  const [livePrices, setLivePrices] = React.useState<PriceQuote[]>([]);
 
   const { writeContractAsync, isPending } = useWriteContract();
-  const { isLoading: confirming, isSuccess: confirmed } =
-    useWaitForTransactionReceipt({ hash: tx });
+  const { isSuccess: requestConfirmed } = useWaitForTransactionReceipt({
+    hash: requestTx,
+  });
 
   const { data: pendingId } = useReadContract({
     address: VAULT_ADDRESS,
@@ -34,7 +87,6 @@ export function RebalanceCard() {
     functionName: "pendingRebalanceId",
     query: { enabled: isVaultConfigured(), refetchInterval: 8_000 },
   });
-
   const { data: completedId } = useReadContract({
     address: VAULT_ADDRESS,
     abi: vaultAbi,
@@ -42,27 +94,72 @@ export function RebalanceCard() {
     query: { enabled: isVaultConfigured(), refetchInterval: 8_000 },
   });
 
-  // When the broadcast is confirmed, flip to "thinking" while we wait for
-  // the TEE worker to fulfil. The watcher below resolves to "fulfilled".
+  // Poll the oracle endpoint for the live prices strip.
   React.useEffect(() => {
-    if (confirmed && phase === "broadcasting") setPhase("thinking");
-  }, [confirmed, phase]);
+    let cancelled = false;
+    async function tick() {
+      try {
+        const r = await fetch("/api/rebalance");
+        const d = (await r.json()) as { ok: boolean; prices?: PriceQuote[] };
+        if (!cancelled && d.ok && d.prices) setLivePrices(d.prices);
+      } catch {
+        /* ignore */
+      }
+    }
+    tick();
+    const id = setInterval(tick, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, []);
+
+  // After requestRebalance is mined, kick off the agent.
+  React.useEffect(() => {
+    if (requestConfirmed && phase === "broadcasting") {
+      setPhase("thinking");
+      void runAgent();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestConfirmed, phase]);
 
   useWatchContractEvent({
     address: VAULT_ADDRESS,
     abi: vaultAbi,
     eventName: "RebalanceFulfilled",
     enabled: isVaultConfigured(),
-    onLogs: (logs) => {
-      const last = logs[logs.length - 1];
-      if (last && last.args && "newPortfolioHandle" in last.args) {
-        setLastFulfilledRoot(last.args.newPortfolioHandle as string);
-        setPhase("fulfilled");
-      }
+    onLogs: () => {
+      if (phase === "fulfilling") setPhase("fulfilled");
     },
   });
 
+  async function runAgent() {
+    setPhase("fulfilling");
+    try {
+      const r = await fetch("/api/rebalance", { method: "POST" });
+      const data = (await r.json()) as
+        | RebalanceResult
+        | { ok: false; error: string };
+      if (!r.ok || !("ok" in data) || !data.ok) {
+        const msg = ("error" in data && data.error) || `HTTP ${r.status}`;
+        setErrorMsg(msg);
+        setPhase("error");
+        return;
+      }
+      setResult(data);
+      setFulfilTx(data.txHash);
+      // event watcher will flip to "fulfilled"
+    } catch (e) {
+      setErrorMsg(e instanceof Error ? e.message : "Network error");
+      setPhase("error");
+    }
+  }
+
   async function onTrigger() {
+    setErrorMsg(undefined);
+    setResult(undefined);
+    setFulfilTx(undefined);
+    setRequestTx(undefined);
     try {
       setPhase("broadcasting");
       const hash = await writeContractAsync({
@@ -70,10 +167,15 @@ export function RebalanceCard() {
         abi: vaultAbi,
         functionName: "requestRebalance",
       });
-      setTx(hash);
+      setRequestTx(hash);
     } catch (err) {
       console.error(err);
-      setPhase("idle");
+      const msg =
+        err instanceof Error
+          ? err.message.split("\n")[0]
+          : "Transaction rejected";
+      setErrorMsg(msg);
+      setPhase("error");
     }
   }
 
@@ -91,8 +193,9 @@ export function RebalanceCard() {
             AI Rebalance
           </CardTitle>
           <CardDescription>
-            Triggers the Yield Fortress Optimizer running inside an iExec Nox
-            TDX enclave.
+            Triggers the Yield Fortress Optimizer (Groq llama-3.3-70b) with
+            live Chainlink oracle prices, then writes encrypted weights to the
+            vault.
           </CardDescription>
         </div>
         <Badge variant={inFlight ? "warn" : "secondary"}>
@@ -101,6 +204,32 @@ export function RebalanceCard() {
       </CardHeader>
 
       <CardContent className="space-y-5">
+        {/* Live Chainlink prices strip */}
+        <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-3">
+          <div className="mb-2 flex items-center gap-2 text-[10px] uppercase tracking-wider text-zinc-500">
+            <Activity className="h-3 w-3" />
+            Live Chainlink feeds (Arb Sepolia)
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {(livePrices.length ? livePrices : [
+              { pair: "ETH/USD",  price: 0, ageSeconds: 0, feed: "0x" as `0x${string}` },
+              { pair: "BTC/USD",  price: 0, ageSeconds: 0, feed: "0x" as `0x${string}` },
+              { pair: "USDC/USD", price: 0, ageSeconds: 0, feed: "0x" as `0x${string}` },
+            ]).map((p) => (
+              <div key={p.pair} className="rounded-md bg-zinc-900/60 px-2 py-1.5">
+                <div className="text-[10px] text-zinc-500">{p.pair}</div>
+                <div className="font-mono text-sm font-semibold text-zinc-100">
+                  {p.price > 0
+                    ? p.price.toLocaleString(undefined, {
+                        maximumFractionDigits: p.pair.startsWith("USDC") ? 4 : 2,
+                      })
+                    : "…"}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
         <div className="grid grid-cols-2 gap-3 text-sm">
           <Stat label="Pending id"   value={String(pending)}   />
           <Stat label="Completed id" value={String(completed)} />
@@ -109,13 +238,20 @@ export function RebalanceCard() {
         <Button
           className="w-full"
           size="lg"
-          disabled={!address || !isVaultConfigured() || isPending || phase !== "idle"}
+          disabled={
+            !address ||
+            !isVaultConfigured() ||
+            isPending ||
+            (phase !== "idle" && phase !== "fulfilled" && phase !== "error")
+          }
           onClick={onTrigger}
         >
-          {phase === "idle"         && (<><CircuitBoard className="h-4 w-4" /> Request AI rebalance</>)}
-          {phase === "broadcasting" && (<><Loader2 className="h-4 w-4 animate-spin" /> Broadcasting tx…</>)}
-          {phase === "thinking"     && (<><Loader2 className="h-4 w-4 animate-spin" /> AI Agent is optimizing in TEE…</>)}
-          {phase === "fulfilled"    && (<><Sparkles className="h-4 w-4" /> Rebalance fulfilled — request again</>)}
+          {phase === "idle"         && (<><CircuitBoard className="h-4 w-4" /> Trigger AI Rebalance</>)}
+          {phase === "broadcasting" && (<><Loader2 className="h-4 w-4 animate-spin" /> Broadcasting request…</>)}
+          {phase === "thinking"     && (<><Loader2 className="h-4 w-4 animate-spin" /> Reading oracles + asking Groq…</>)}
+          {phase === "fulfilling"   && (<><Loader2 className="h-4 w-4 animate-spin" /> Submitting encrypted weights on-chain…</>)}
+          {phase === "fulfilled"    && (<><Sparkles className="h-4 w-4" /> Done — trigger again</>)}
+          {phase === "error"        && (<><CircuitBoard className="h-4 w-4" /> Retry rebalance</>)}
         </Button>
 
         <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-3 text-xs">
@@ -128,22 +264,65 @@ export function RebalanceCard() {
           <p className="text-zinc-400">
             {phase === "idle"         && "Awaiting trigger. Anyone can request a rebalance once the cool-down has elapsed."}
             {phase === "broadcasting" && "Submitting requestRebalance() to Arbitrum Sepolia."}
-            {phase === "thinking"     && "TDX worker has picked up the request, decrypted the portfolio inside the enclave, and is querying the live yield feed."}
-            {phase === "fulfilled"    && (<>New portfolio commitment <span className="font-mono text-emerald-glow">{shortHash(lastFulfilledRoot)}</span> — weights remain encrypted on-chain.</>)}
+            {phase === "thinking"     && "Agent is pulling live Chainlink prices and calling Groq llama-3.3-70b for an allocation."}
+            {phase === "fulfilling"   && "Allocation received. Building encrypted weight handles and submitting fulfilRebalance()."}
+            {phase === "fulfilled"    && (<>New portfolio commitment <span className="font-mono text-emerald-glow">{shortHash(result?.portfolioRoot)}</span> — weights remain encrypted on-chain.</>)}
+            {phase === "error"        && (<span className="text-amber-300">{errorMsg}</span>)}
           </p>
         </div>
 
-        {tx && (
-          <a
-            href={txUrl(tx)}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1 text-xs text-emerald-glow hover:underline"
-          >
-            {confirming ? "Confirming…" : confirmed ? "View confirmed tx" : "View tx"}
-            <ExternalLink className="h-3 w-3" />
-          </a>
+        {/* AI plan summary */}
+        {result && (phase === "fulfilling" || phase === "fulfilled") && (
+          <div className="space-y-2 rounded-lg border border-emerald-glow/30 bg-emerald-glow/5 p-3 text-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] uppercase tracking-wider text-emerald-glow">
+                AI decision
+              </span>
+              <span className="font-mono text-emerald-glow">
+                {(result.plan.expectedApyBps / 100).toFixed(2)}% expected APY
+              </span>
+            </div>
+            <p className="italic text-zinc-300">&ldquo;{result.plan.reason}&rdquo;</p>
+            <div className="grid grid-cols-2 gap-1.5 pt-1">
+              {result.plan.allocations.map((a) => (
+                <div
+                  key={a.strategy}
+                  className="flex items-center justify-between rounded bg-zinc-950/60 px-2 py-1"
+                >
+                  <span className="text-zinc-400">
+                    {STRATEGY_LABELS[a.strategy] ?? a.strategy}
+                  </span>
+                  <span className="font-mono text-zinc-100">
+                    {(a.weightBps / 100).toFixed(0)}%
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
+
+        <div className="flex flex-wrap items-center gap-3 text-xs">
+          {requestTx && (
+            <a
+              href={txUrl(requestTx)}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-zinc-400 hover:text-zinc-100"
+            >
+              request tx <ExternalLink className="h-3 w-3" />
+            </a>
+          )}
+          {fulfilTx && (
+            <a
+              href={txUrl(fulfilTx)}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-emerald-glow hover:underline"
+            >
+              fulfil tx <ExternalLink className="h-3 w-3" />
+            </a>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
@@ -164,6 +343,8 @@ function statusDotClass(phase: Phase) {
     case "idle":         return `${base} bg-zinc-600`;
     case "broadcasting": return `${base} bg-amber-400 animate-pulse-soft`;
     case "thinking":     return `${base} bg-emerald-glow animate-glow`;
+    case "fulfilling":   return `${base} bg-emerald-glow animate-glow`;
     case "fulfilled":    return `${base} bg-emerald-glow`;
+    case "error":        return `${base} bg-rose-400`;
   }
 }
