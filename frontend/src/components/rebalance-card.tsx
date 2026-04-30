@@ -76,27 +76,34 @@ export function RebalanceCard() {
   const [result, setResult] = React.useState<RebalanceResult | undefined>();
   const [livePrices, setLivePrices] = React.useState<PriceQuote[]>([]);
   const [hydrated, setHydrated] = React.useState(false);
+  const [savedAt, setSavedAt] = React.useState<number | undefined>();
 
   // Hydrate the last successful rebalance from localStorage so the AI
-  // decision + portfolio commitment + tx links survive a page refresh
-  // and remain visible even before the wallet reconnects.
+  // decision + portfolio commitment + tx links + timestamp survive a
+  // page refresh and remain visible even before the wallet reconnects.
   React.useEffect(() => {
     try {
       const raw = typeof window !== "undefined"
-        ? window.localStorage.getItem("nox.lastRebalance.v1")
+        ? window.localStorage.getItem("nox.lastRebalance.v2")
         : null;
       if (raw) {
         const saved = JSON.parse(raw) as {
           result?: RebalanceResult;
           requestTx?: `0x${string}`;
           fulfilTx?: `0x${string}`;
+          at?: number;
         };
         if (saved.result) {
           setResult(saved.result);
+          // Treat any persisted result as a successful past run so the
+          // rest of the UI (badge, plan panel, status text) reflects an
+          // active strategy. We deliberately do NOT use `phase` as the
+          // sole "we have a strategy" signal anymore.
           setPhase("fulfilled");
         }
         if (saved.requestTx) setRequestTx(saved.requestTx);
         if (saved.fulfilTx)  setFulfilTx(saved.fulfilTx);
+        if (saved.at)        setSavedAt(saved.at);
       }
     } catch {
       /* ignore parse / storage errors */
@@ -105,19 +112,27 @@ export function RebalanceCard() {
     }
   }, []);
 
-  // Persist the last successful rebalance whenever it changes.
+  // Persist the last rebalance as soon as we have a `result`. We do NOT
+  // gate on `phase === "fulfilled"` because that flag depends on flaky
+  // public-RPC event/poll fallbacks; the result payload itself (with its
+  // tx hash + portfolio root) is the authoritative success signal.
   React.useEffect(() => {
     if (!hydrated) return;
-    if (phase !== "fulfilled" || !result) return;
+    if (!result) return;
     try {
+      const at = Date.now();
+      setSavedAt(at);
       window.localStorage.setItem(
-        "nox.lastRebalance.v1",
-        JSON.stringify({ result, requestTx, fulfilTx }),
+        "nox.lastRebalance.v2",
+        JSON.stringify({ result, requestTx, fulfilTx, at }),
       );
     } catch {
       /* ignore quota / storage errors */
     }
-  }, [hydrated, phase, result, requestTx, fulfilTx]);
+    // We deliberately exclude `savedAt` from deps so each new `result`
+    // refreshes the timestamp without an infinite loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, result, requestTx, fulfilTx]);
 
   // Snapshot of pendingRebalanceId / completedRebalanceId at the moment
   // we triggered this run. Used so we can detect on-chain progress via
@@ -153,6 +168,12 @@ export function RebalanceCard() {
     abi: vaultAbi,
     functionName: "completedRebalanceId",
     query: { enabled: isVaultConfigured(), refetchInterval: pollInterval },
+  });
+  const { data: lastRebalanceAt } = useReadContract({
+    address: VAULT_ADDRESS,
+    abi: vaultAbi,
+    functionName: "lastRebalanceAt",
+    query: { enabled: isVaultConfigured(), refetchInterval: 30_000 },
   });
 
   // Poll the oracle endpoint for the live prices strip.
@@ -307,15 +328,15 @@ export function RebalanceCard() {
           variant={
             inFlight
               ? "warn"
-              : phase === "fulfilled"
+              : result
               ? "default"
               : "secondary"
           }
         >
           {inFlight
             ? "In flight"
-            : phase === "fulfilled"
-            ? "Done"
+            : result
+            ? "Active"
             : "Idle"}
         </Badge>
       </CardHeader>
@@ -417,6 +438,24 @@ export function RebalanceCard() {
                 </div>
               ))}
             </div>
+            {(() => {
+              // Prefer the on-chain timestamp (authoritative across users
+              // and devices); fall back to the locally persisted timestamp
+              // when the read hasn't returned yet or there's no wallet.
+              const onChainSec = lastRebalanceAt
+                ? Number(lastRebalanceAt as bigint)
+                : 0;
+              const ms = onChainSec > 0 ? onChainSec * 1000 : savedAt;
+              if (!ms) return null;
+              return (
+                <div className="flex items-center justify-between border-t border-emerald-glow/15 pt-2 text-[10px] uppercase tracking-wider text-zinc-500">
+                  <span>Last rebalance</span>
+                  <span className="font-mono text-zinc-300">
+                    {formatRebalanceTime(ms)}
+                  </span>
+                </div>
+              );
+            })()}
           </div>
         )}
 
@@ -454,6 +493,23 @@ function Stat({ label, value }: { label: string; value: string }) {
       <div className="mt-0.5 font-mono text-lg font-semibold text-zinc-100">{value}</div>
     </div>
   );
+}
+
+function formatRebalanceTime(ms: number): string {
+  const diffSec = Math.max(0, Math.floor((Date.now() - ms) / 1000));
+  let rel: string;
+  if (diffSec < 45)            rel = "just now";
+  else if (diffSec < 3600)     rel = `${Math.round(diffSec / 60)} min ago`;
+  else if (diffSec < 86400)    rel = `${Math.round(diffSec / 3600)} hr ago`;
+  else                         rel = `${Math.round(diffSec / 86400)} d ago`;
+  let abs = "";
+  try {
+    abs = new Date(ms).toLocaleString(undefined, {
+      year: "numeric", month: "short", day: "numeric",
+      hour: "2-digit", minute: "2-digit",
+    });
+  } catch { /* ignore */ }
+  return abs ? `${rel} · ${abs}` : rel;
 }
 
 function statusDotClass(phase: Phase) {
