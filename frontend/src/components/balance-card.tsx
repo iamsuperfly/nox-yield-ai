@@ -74,7 +74,7 @@ export function BalanceCard() {
                 <span className="text-zinc-600">— · —</span>
               ) : (
                 <span aria-label="encrypted balance">
-                  ●●●●●●●●●●●●●●●●{" "}
+                  ●●●●{" "}
                   <span className="text-zinc-400 text-2xl sm:text-3xl">cFORT</span>
                 </span>
               )}
