@@ -136,14 +136,9 @@ You'll need to populate `.env.local` with:
 What you get:
 
 - **Confidential Balance** card with a 🔒 (Lock) badge — reads your
-  encrypted ERC-7984 share handle from the cFORT token and shows the
-  truncated handle + `cFORT` label as soon as a deposit lands (no more
-  permanent placeholder dots).
-- **Verify on-chain** panel (under Confidential Balance) — shows the raw
-  32-byte ciphertext handle, a one-click copy button, and a deep link to
-  the cFORT contract's *Read Contract* tab on Arbiscan so anyone can call
-  `confidentialBalanceOf(your_address)` and confirm the same handle
-  themselves. Plaintext amount is never revealed.
+  encrypted ERC-7984 share handle from the cFORT token. By default the
+  balance renders as clean placeholder dots; clicking *Request reveal*
+  expands the full 64-character ciphertext handle in a copyable box.
 - **Deposit / Withdraw** that builds the ciphertext + caller-bound input
   proof client-side and calls the vault.
 - **Strategy universe** table backed by live Chainlink AggregatorV3 feeds

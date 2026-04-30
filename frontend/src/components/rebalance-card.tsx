@@ -76,10 +76,13 @@ export function RebalanceCard() {
   const [result, setResult] = React.useState<RebalanceResult | undefined>();
   const [livePrices, setLivePrices] = React.useState<PriceQuote[]>([]);
 
-  // Snapshot of completedRebalanceId at the moment we triggered this run.
-  // Used so we can detect on-chain fulfilment via polling without relying
-  // solely on useWatchContractEvent (which is flaky on public RPCs).
+  // Snapshot of pendingRebalanceId / completedRebalanceId at the moment
+  // we triggered this run. Used so we can detect on-chain progress via
+  // polling without relying solely on useWaitForTransactionReceipt or
+  // useWatchContractEvent (both of which are flaky on public RPCs).
+  const pendingSnapshotRef = React.useRef<bigint | null>(null);
   const completedSnapshotRef = React.useRef<bigint | null>(null);
+  const agentStartedRef = React.useRef(false);
 
   const { writeContractAsync, isPending } = useWriteContract();
   const { isSuccess: requestConfirmed } = useWaitForTransactionReceipt({
@@ -130,13 +133,23 @@ export function RebalanceCard() {
   }, []);
 
   // After requestRebalance is mined, kick off the agent.
+  // We use TWO independent signals so we never get stuck in "broadcasting":
+  //   (a) useWaitForTransactionReceipt resolving (fast path, but flaky on
+  //       public Arb Sepolia RPCs)
+  //   (b) pendingRebalanceId polling advancing past the snapshot we took
+  //       at trigger time (reliable fallback)
   React.useEffect(() => {
-    if (requestConfirmed && phase === "broadcasting") {
+    if (phase !== "broadcasting") return;
+    const pendingNow = (pendingId as bigint | undefined) ?? 0n;
+    const snap = pendingSnapshotRef.current;
+    const advanced = snap !== null && pendingNow > snap;
+    if ((requestConfirmed || advanced) && !agentStartedRef.current) {
+      agentStartedRef.current = true;
       setPhase("thinking");
       void runAgent();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [requestConfirmed, phase]);
+  }, [requestConfirmed, pendingId, phase]);
 
   // Fast path: WebSocket-style event subscription. Often misses logs on
   // public Arbitrum Sepolia RPCs, so it is paired with the polling effect
@@ -203,9 +216,12 @@ export function RebalanceCard() {
     setResult(undefined);
     setFulfilTx(undefined);
     setRequestTx(undefined);
-    // Capture the current completed id so the polling effect can detect
-    // when this rebalance becomes fulfilled on-chain.
+    // Capture the current pending + completed ids so the polling effects
+    // can detect both broadcast confirmation and rebalance fulfilment
+    // even if useWaitForTransactionReceipt / event watcher misfire.
+    pendingSnapshotRef.current = (pendingId as bigint | undefined) ?? 0n;
     completedSnapshotRef.current = (completedId as bigint | undefined) ?? 0n;
+    agentStartedRef.current = false;
     try {
       setPhase("broadcasting");
       const hash = await writeContractAsync({
