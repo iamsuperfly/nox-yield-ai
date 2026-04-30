@@ -136,15 +136,24 @@ You'll need to populate `.env.local` with:
 What you get:
 
 - **Confidential Balance** card with a 🔒 (Lock) badge — reads your
-  encrypted ERC-7984 share handle from the cFORT token.
+  encrypted ERC-7984 share handle from the cFORT token and shows the
+  truncated handle + `cFORT` label as soon as a deposit lands (no more
+  permanent placeholder dots).
+- **Verify on-chain** panel (under Confidential Balance) — shows the raw
+  32-byte ciphertext handle, a one-click copy button, and a deep link to
+  the cFORT contract's *Read Contract* tab on Arbiscan so anyone can call
+  `confidentialBalanceOf(your_address)` and confirm the same handle
+  themselves. Plaintext amount is never revealed.
 - **Deposit / Withdraw** that builds the ciphertext + caller-bound input
   proof client-side and calls the vault.
-- **Strategy universe** table with mock yields (T-Bills 4.80 %, IG Bonds
-  5.90 %, Private Credit 7.20 %, Tokenised MMF 5.00 %) — replaced by
-  Chainlink Functions in BUILD 2.
-- **Request AI Rebalance** button — broadcasts `requestRebalance()` and
-  shows *"AI Agent is optimizing in TEE…"* until the `RebalanceFulfilled`
-  event arrives with the new portfolio commitment root.
+- **Strategy universe** table backed by live Chainlink AggregatorV3 feeds
+  on Arbitrum Sepolia (ETH/USD, BTC/USD, USDC/USD) — the same prices the
+  TEE agent reads when it builds the allocation.
+- **Request AI Rebalance** button — broadcasts `requestRebalance()`,
+  invokes the TEE agent, then auto-detects fulfilment by polling
+  `completedRebalanceId` and watching the `RebalanceFulfilled` event, so
+  the status flips from *Submitting encrypted weights on-chain…* to
+  *Done* without a page refresh.
 
 You can also run it from the project root:
 

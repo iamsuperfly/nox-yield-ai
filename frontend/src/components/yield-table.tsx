@@ -18,13 +18,15 @@ export function YieldTable() {
             Strategy universe
           </CardTitle>
           <CardDescription>
-            Live yields the AI agent reads inside the TEE.{" "}
-            <span className="text-zinc-500">
-              Mock data in BUILD 1 — replaced by Chainlink Functions in BUILD 2.
-            </span>
+            Live yields the AI agent reads inside the TEE. Rebalance decisions
+            are anchored to{" "}
+            <span className="text-zinc-300">
+              live Chainlink AggregatorV3 feeds
+            </span>{" "}
+            on Arbitrum Sepolia (ETH/USD, BTC/USD, USDC/USD).
           </CardDescription>
         </div>
-        <Badge variant="info">Mock feed</Badge>
+        <Badge variant="info">Live Chainlink Feed</Badge>
       </CardHeader>
       <CardContent className="px-0 pb-2">
         <Table>
