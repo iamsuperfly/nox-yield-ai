@@ -76,22 +76,37 @@ export function RebalanceCard() {
   const [result, setResult] = React.useState<RebalanceResult | undefined>();
   const [livePrices, setLivePrices] = React.useState<PriceQuote[]>([]);
 
+  // Snapshot of completedRebalanceId at the moment we triggered this run.
+  // Used so we can detect on-chain fulfilment via polling without relying
+  // solely on useWatchContractEvent (which is flaky on public RPCs).
+  const completedSnapshotRef = React.useRef<bigint | null>(null);
+
   const { writeContractAsync, isPending } = useWriteContract();
   const { isSuccess: requestConfirmed } = useWaitForTransactionReceipt({
     hash: requestTx,
   });
+  const { isSuccess: fulfilConfirmed } = useWaitForTransactionReceipt({
+    hash: fulfilTx,
+  });
+
+  // Poll quickly while a rebalance is in flight so the UI doesn't get stuck
+  // on "Submitting encrypted weights on-chain…" if the event watcher misses
+  // the log. Slow down to the normal cadence otherwise.
+  const inFlightPhase =
+    phase === "broadcasting" || phase === "thinking" || phase === "fulfilling";
+  const pollInterval = inFlightPhase ? 3_000 : 8_000;
 
   const { data: pendingId } = useReadContract({
     address: VAULT_ADDRESS,
     abi: vaultAbi,
     functionName: "pendingRebalanceId",
-    query: { enabled: isVaultConfigured(), refetchInterval: 8_000 },
+    query: { enabled: isVaultConfigured(), refetchInterval: pollInterval },
   });
   const { data: completedId } = useReadContract({
     address: VAULT_ADDRESS,
     abi: vaultAbi,
     functionName: "completedRebalanceId",
-    query: { enabled: isVaultConfigured(), refetchInterval: 8_000 },
+    query: { enabled: isVaultConfigured(), refetchInterval: pollInterval },
   });
 
   // Poll the oracle endpoint for the live prices strip.
@@ -123,15 +138,43 @@ export function RebalanceCard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requestConfirmed, phase]);
 
+  // Fast path: WebSocket-style event subscription. Often misses logs on
+  // public Arbitrum Sepolia RPCs, so it is paired with the polling effect
+  // below as a reliable fallback.
   useWatchContractEvent({
     address: VAULT_ADDRESS,
     abi: vaultAbi,
     eventName: "RebalanceFulfilled",
     enabled: isVaultConfigured(),
     onLogs: () => {
-      if (phase === "fulfilling") setPhase("fulfilled");
+      if (phase === "fulfilling" || phase === "thinking") setPhase("fulfilled");
     },
   });
+
+  // Reliable fallback: while a rebalance is in flight, watch the
+  // completedRebalanceId view function. As soon as it advances past the
+  // snapshot we took at trigger time, the rebalance has been fulfilled
+  // on-chain even if our event subscription dropped the log.
+  React.useEffect(() => {
+    if (completedId === undefined || completedId === null) return;
+    const current = completedId as bigint;
+    const snap = completedSnapshotRef.current;
+    if (snap === null) return;
+    if (
+      current > snap &&
+      (phase === "fulfilling" || phase === "thinking" || phase === "broadcasting")
+    ) {
+      setPhase("fulfilled");
+    }
+  }, [completedId, phase]);
+
+  // Belt-and-braces: if we know the fulfil tx hash, treat its on-chain
+  // confirmation as the success signal too.
+  React.useEffect(() => {
+    if (fulfilConfirmed && (phase === "fulfilling" || phase === "thinking")) {
+      setPhase("fulfilled");
+    }
+  }, [fulfilConfirmed, phase]);
 
   async function runAgent() {
     setPhase("fulfilling");
@@ -160,6 +203,9 @@ export function RebalanceCard() {
     setResult(undefined);
     setFulfilTx(undefined);
     setRequestTx(undefined);
+    // Capture the current completed id so the polling effect can detect
+    // when this rebalance becomes fulfilled on-chain.
+    completedSnapshotRef.current = (completedId as bigint | undefined) ?? 0n;
     try {
       setPhase("broadcasting");
       const hash = await writeContractAsync({
