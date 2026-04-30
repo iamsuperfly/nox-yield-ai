@@ -75,6 +75,49 @@ export function RebalanceCard() {
   const [errorMsg, setErrorMsg] = React.useState<string | undefined>();
   const [result, setResult] = React.useState<RebalanceResult | undefined>();
   const [livePrices, setLivePrices] = React.useState<PriceQuote[]>([]);
+  const [hydrated, setHydrated] = React.useState(false);
+
+  // Hydrate the last successful rebalance from localStorage so the AI
+  // decision + portfolio commitment + tx links survive a page refresh
+  // and remain visible even before the wallet reconnects.
+  React.useEffect(() => {
+    try {
+      const raw = typeof window !== "undefined"
+        ? window.localStorage.getItem("nox.lastRebalance.v1")
+        : null;
+      if (raw) {
+        const saved = JSON.parse(raw) as {
+          result?: RebalanceResult;
+          requestTx?: `0x${string}`;
+          fulfilTx?: `0x${string}`;
+        };
+        if (saved.result) {
+          setResult(saved.result);
+          setPhase("fulfilled");
+        }
+        if (saved.requestTx) setRequestTx(saved.requestTx);
+        if (saved.fulfilTx)  setFulfilTx(saved.fulfilTx);
+      }
+    } catch {
+      /* ignore parse / storage errors */
+    } finally {
+      setHydrated(true);
+    }
+  }, []);
+
+  // Persist the last successful rebalance whenever it changes.
+  React.useEffect(() => {
+    if (!hydrated) return;
+    if (phase !== "fulfilled" || !result) return;
+    try {
+      window.localStorage.setItem(
+        "nox.lastRebalance.v1",
+        JSON.stringify({ result, requestTx, fulfilTx }),
+      );
+    } catch {
+      /* ignore quota / storage errors */
+    }
+  }, [hydrated, phase, result, requestTx, fulfilTx]);
 
   // Snapshot of pendingRebalanceId / completedRebalanceId at the moment
   // we triggered this run. Used so we can detect on-chain progress via
@@ -260,8 +303,20 @@ export function RebalanceCard() {
             vault.
           </CardDescription>
         </div>
-        <Badge variant={inFlight ? "warn" : "secondary"}>
-          {inFlight ? "In flight" : "Idle"}
+        <Badge
+          variant={
+            inFlight
+              ? "warn"
+              : phase === "fulfilled"
+              ? "default"
+              : "secondary"
+          }
+        >
+          {inFlight
+            ? "In flight"
+            : phase === "fulfilled"
+            ? "Done"
+            : "Idle"}
         </Badge>
       </CardHeader>
 
@@ -333,8 +388,10 @@ export function RebalanceCard() {
           </p>
         </div>
 
-        {/* AI plan summary */}
-        {result && (phase === "fulfilling" || phase === "fulfilled") && (
+        {/* AI plan summary — always rendered while we have a result, so the
+            last triggered strategy stays visible across page refreshes and
+            even when no wallet is connected. */}
+        {result && (
           <div className="space-y-2 rounded-lg border border-emerald-glow/30 bg-emerald-glow/5 p-3 text-xs">
             <div className="flex items-center justify-between">
               <span className="text-[10px] uppercase tracking-wider text-emerald-glow">
