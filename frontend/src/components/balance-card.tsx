@@ -1,7 +1,7 @@
 "use client";
 
 import { useAccount, useReadContract } from "wagmi";
-import { Lock, Eye, EyeOff, Copy, Check } from "lucide-react";
+import { Lock, Eye, EyeOff, Copy, Check, CircleHelp } from "lucide-react";
 import * as React from "react";
 import {
   Card,
@@ -79,7 +79,7 @@ export function BalanceCard() {
                 </span>
               )}
             </div>
-            <div className="mt-1 text-xs text-zinc-500">
+            <div className="mt-1 flex items-center gap-1 text-xs text-zinc-500">
               {!isConnected
                 ? "Connect a wallet to view your encrypted handle."
                 : isFetching && !handleHex
@@ -87,7 +87,23 @@ export function BalanceCard() {
                 : hasHandle
                 ? "Encrypted ERC-7984 share handle."
                 : "No handle yet — make a deposit to mint encrypted shares."}
+              <span
+                title="This value is intentionally encrypted. You can verify the on-chain token contract and your address activity on Arbiscan."
+                aria-label="Encrypted balance help"
+              >
+                <CircleHelp className="h-3.5 w-3.5 text-zinc-400" />
+              </span>
             </div>
+            {isConnected && (
+              <a
+                className="mt-1 inline-block text-xs text-blue-400 underline underline-offset-2 hover:text-blue-300"
+                href={`https://sepolia.arbiscan.io/token/${SHARE_TOKEN_ADDRESS}?a=${address}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Verify encrypted balance on Arbiscan
+              </a>
+            )}
           </div>
           <Button
             variant="outline"
