@@ -22,7 +22,7 @@ export const dynamic = "force-dynamic";
 
 const VAULT_ADDRESS = (
   process.env.NEXT_PUBLIC_VAULT_ADDRESS ||
-  "0x2ef85dE8242D490e850855Dc28FbD95bD4F5CEb1"
+  "0x0356098AC53C97e8e7F8025fF75c96AD153F161c"
 ) as Address;
 
 const RPC_URL =

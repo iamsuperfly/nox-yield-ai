@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 
 const ASSET_TOKEN = (
   process.env.NEXT_PUBLIC_ASSET_TOKEN_ADDRESS ||
-  "0x85EF3afECFB7e7c021cE974748e2c4f4D99A4c9e"
+  "0xc7005Ed975F87c2958a5BE84FaB0eDe47799C6c9"
 ) as Address;
 
 const RPC_URL =
