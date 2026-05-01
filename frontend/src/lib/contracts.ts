@@ -11,9 +11,9 @@ const env = (k: string) => process.env[k] ?? "";
 const DEFAULTS = {
   CHAIN_ID: 421614,
   RPC_URL:  "https://sepolia-rollup.arbitrum.io/rpc",
-  VAULT:    "0x2ef85dE8242D490e850855Dc28FbD95bD4F5CEb1",
-  ASSET:    "0x85EF3afECFB7e7c021cE974748e2c4f4D99A4c9e",
-  SHARE:    "0xebB7a8967C5E18eA37C445Eaa6c5B3Ef6b3119D2",
+  VAULT:    "0x0356098AC53C97e8e7F8025fF75c96AD153F161c",
+  ASSET:    "0xc7005Ed975F87c2958a5BE84FaB0eDe47799C6c9",
+  SHARE:    "0x89b361D77354EeF2F4218539690e0dFa05c9041A",
   APP_NAME: "Nox Yield AI",
 } as const;
 
