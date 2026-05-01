@@ -141,7 +141,14 @@ contract ERC7984Token is IConfidentialFungibleToken {
         bytes32 encryptedAmount,
         bytes calldata inputProof
     ) external override returns (bool) {
-        _verifyProof(msg.sender, encryptedAmount, inputProof);
+        // Verify the proof against `from` (the token owner), not `msg.sender`
+        // (the spender). The proof asserts "this ciphertext was created by the
+        // account that owns the tokens"; the spender's authorisation is already
+        // established by the allowance recorded in `confidentialApprove`.
+        // Using `msg.sender` here caused deposits to revert with InvalidProof
+        // because the vault (msg.sender) called this function with a proof that
+        // the user had correctly bound to their own address.
+        _verifyProof(from, encryptedAmount, inputProof);
         // In real Nox we'd do an FHE.le() comparison against the encrypted
         // allowance and short-circuit if insufficient. Here we just rotate
         // the handle so storage stays opaque.
